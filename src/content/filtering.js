@@ -3,6 +3,7 @@
 
   toolkit.applyOwnerFilter = (selectedOwners) => {
     const selected = new Set(selectedOwners);
+    const includesNoOwner = selected.has(toolkit.constants.NO_OWNER_FILTER_VALUE);
     const fileBlocks = toolkit.getDiffFileBlocks();
     let visibleCount = 0;
 
@@ -16,7 +17,9 @@
       }
 
       const fileOwners = toolkit.getOwnersForFileBlock(fileBlock);
-      const isMatch = Array.from(fileOwners).some((owner) => selected.has(owner));
+      const hasSelectedOwner = Array.from(fileOwners).some((owner) => selected.has(owner));
+      const isNoOwnerMatch = includesNoOwner && fileOwners.size === 0;
+      const isMatch = hasSelectedOwner || isNoOwnerMatch;
       toolkit.setElementHidden(diffContainer, !isMatch);
       toolkit.setElementHidden(fileBlock, !isMatch);
       if (isMatch) {
@@ -59,9 +62,25 @@
       return { visibleLeafCount: 0, totalLeafCount: 0 };
     }
     const hasActiveFilter = selectedOwners.length > 0;
+    const selectedSet = new Set(selectedOwners);
+    const includesNoOwner = selectedSet.has(toolkit.constants.NO_OWNER_FILTER_VALUE);
+    const ownerData = toolkit.state.ownerData;
     const visibleEntries = toolkit.getVisibleRightSideEntries();
     const visibleDiffIds = new Set(visibleEntries.map((entry) => entry.diffId));
     const visiblePaths = new Set(visibleEntries.map((entry) => entry.path));
+    const matchedPathsByData = new Set();
+
+    if (hasActiveFilter && ownerData.status === "ready" && ownerData.source === "codeowners") {
+      for (const [path, owners] of Object.entries(ownerData.ownersByPath || {})) {
+        if (!Array.isArray(owners)) {
+          continue;
+        }
+
+        if (owners.some((owner) => selectedSet.has(owner)) || (includesNoOwner && owners.length === 0)) {
+          matchedPathsByData.add(toolkit.normalizeFilePath(path));
+        }
+      }
+    }
 
     const leafRows = toolkit.getTreeFileRows(treeRoot);
 
@@ -70,7 +89,10 @@
       const diffId = diffHref.replace("#", "");
       const treePath = toolkit.normalizeFilePath(leafItem.id);
       const isVisible =
-        !hasActiveFilter || visibleDiffIds.has(diffId) || visiblePaths.has(treePath);
+        !hasActiveFilter ||
+        visibleDiffIds.has(diffId) ||
+        visiblePaths.has(treePath) ||
+        matchedPathsByData.has(treePath);
       toolkit.setElementHidden(leafItem, !isVisible);
     }
 

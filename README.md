@@ -12,6 +12,22 @@ Chrome extension that enhances GitHub Pull Request **changes view** with code-ow
 - Supports badge hover popups via GitHub hovercard endpoints
 - Adds clickable team/user links on owner badges
 
+## Feature screenshots
+
+### Overview
+
+![Overview](docs/images/overview.png)
+
+
+### Sidebar filter + tree sync
+
+![Sidebar owner filter and synced tree](docs/images/feature-sidebar-filter-tree.png)
+
+
+### Diff header owner badge + expand/collapse controls
+
+![Owner badge in diff header](docs/images/feature-diff-header-owner-badge.png)
+
 ## Project structure
 
 Core content-script logic is split into modules:

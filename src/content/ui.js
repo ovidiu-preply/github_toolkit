@@ -25,17 +25,79 @@
     }
 
     const selectedOwners = toolkit.getSelectedOwners(root);
+    const formatSelectedOwner = (value) =>
+      value === toolkit.constants.NO_OWNER_FILTER_VALUE ? "No owner" : value;
     if (selectedOwners.length === 0) {
       pickerToggle.textContent = "All owners";
       return;
     }
 
     if (selectedOwners.length === 1) {
-      pickerToggle.textContent = selectedOwners[0];
+      pickerToggle.textContent = formatSelectedOwner(selectedOwners[0]);
       return;
     }
 
     pickerToggle.textContent = `${selectedOwners.length} owners selected`;
+  };
+
+  toolkit.buildRightSideControlsUi = () => {
+    const root = document.createElement("div");
+    root.id = toolkit.constants.RIGHT_CONTROLS_ID;
+    root.className = "gh-owner-filter-right-controls";
+
+    const expandButton = document.createElement("button");
+    expandButton.type = "button";
+    expandButton.className = "gh-owner-filter-right-controls__button";
+    expandButton.textContent = "Expand all";
+    expandButton.addEventListener("click", () => {
+      const { changedCount } = toolkit.setAllRightSideFilesExpanded(true);
+      toolkit.log("Expand all files clicked. Changed:", changedCount);
+      toolkit.updateRightSideControlsState(root);
+    });
+
+    const collapseButton = document.createElement("button");
+    collapseButton.type = "button";
+    collapseButton.className = "gh-owner-filter-right-controls__button";
+    collapseButton.textContent = "Collapse all";
+    collapseButton.addEventListener("click", () => {
+      const { changedCount } = toolkit.setAllRightSideFilesExpanded(false);
+      toolkit.log("Collapse all files clicked. Changed:", changedCount);
+      toolkit.updateRightSideControlsState(root);
+    });
+
+    root.appendChild(expandButton);
+    root.appendChild(collapseButton);
+    return root;
+  };
+
+  toolkit.updateRightSideControlsState = (root) => {
+    if (!root) {
+      return;
+    }
+
+    const buttons = root.querySelectorAll(".gh-owner-filter-right-controls__button");
+    if (buttons.length !== 2) {
+      return;
+    }
+
+    const [expandButton, collapseButton] = buttons;
+    const fileBlocks = toolkit
+      .getDiffFileBlocks()
+      .filter((fileBlock) => !toolkit.isElementHiddenByFilter(fileBlock));
+    let hasExpanded = false;
+    let hasCollapsed = false;
+
+    for (const fileBlock of fileBlocks) {
+      const expanded = toolkit.isFileBlockExpanded(fileBlock);
+      if (expanded === true) {
+        hasExpanded = true;
+      } else if (expanded === false) {
+        hasCollapsed = true;
+      }
+    }
+
+    expandButton.disabled = !hasCollapsed;
+    collapseButton.disabled = !hasExpanded;
   };
 
   toolkit.buildFilterUi = () => {
@@ -98,8 +160,37 @@
 
     const previousValues = new Set(toolkit.getSelectedOwners(root));
     const owners = toolkit.getOwnersFromPage();
-    const ownerSignature = owners.join("|");
-    if (ownerSignature === toolkit.state.lastOwnerSignature) {
+    const ownerData = toolkit.state.ownerData;
+    const ownerFileCounts = toolkit.getOwnerFileCounts();
+    const noOwnerFileCount = toolkit.getNoOwnerFileCount();
+    const ownerOptions = owners.map((owner) => ({
+      value: owner,
+      label: owner,
+      filesCount: ownerFileCounts.get(owner)
+    }));
+    if (noOwnerFileCount > 0) {
+      ownerOptions.push({
+        value: toolkit.constants.NO_OWNER_FILTER_VALUE,
+        label: "No owner",
+        filesCount: noOwnerFileCount
+      });
+    }
+
+    const ownerSignature = ownerOptions
+      .map((option) => `${option.value}:${option.filesCount ?? "-"}`)
+      .join("|");
+    const existingOwnerCheckboxCount = root.querySelectorAll(".gh-owner-filter__checkbox").length;
+    const needsOwnerListRebuild = ownerOptions.length > 0 && existingOwnerCheckboxCount === 0;
+    const resolvedNoteText =
+      ownerData.source === "codeowners"
+        ? `Found ${owners.length} owner(s) from CODEOWNERS. Select multiple via checkboxes.`
+        : `Found ${owners.length} owner(s). Select multiple via checkboxes.`;
+    if (ownerSignature === toolkit.state.lastOwnerSignature && !needsOwnerListRebuild) {
+      if (ownerData.status === "loading") {
+        note.textContent = "Loading owners from CODEOWNERS...";
+      } else if (owners.length > 0) {
+        note.textContent = resolvedNoteText;
+      }
       toolkit.updatePickerLabel(root);
       return;
     }
@@ -109,29 +200,34 @@
 
     checkboxList.innerHTML = "";
 
-    if (owners.length === 0) {
+    if (ownerOptions.length === 0) {
       checkboxList.textContent = "No owners found yet.";
       toolkit.updatePickerLabel(root);
-      note.textContent = "No owners found yet.";
+      note.textContent =
+        ownerData.status === "loading"
+          ? "Loading owners from CODEOWNERS..."
+          : "No owners found yet.";
       return;
     }
 
-    for (const owner of owners) {
+    for (const option of ownerOptions) {
       const row = document.createElement("label");
       row.className = "gh-owner-filter__checkbox-row";
 
       const input = document.createElement("input");
       input.type = "checkbox";
       input.className = "gh-owner-filter__checkbox";
-      input.value = owner;
-      input.checked = previousValues.has(owner);
+      input.value = option.value;
+      input.checked = previousValues.has(option.value);
       input.addEventListener("change", () => {
         toolkit.updatePickerLabel(root);
         toolkit.applyCurrentSelection?.(root);
       });
 
       const text = document.createElement("span");
-      text.textContent = owner;
+      text.textContent = Number.isInteger(option.filesCount)
+        ? `${option.label} (${option.filesCount})`
+        : option.label;
 
       row.appendChild(input);
       row.appendChild(text);
@@ -139,7 +235,7 @@
     }
 
     toolkit.updatePickerLabel(root);
-    note.textContent = `Found ${owners.length} owner(s). Select multiple via checkboxes.`;
+    note.textContent = resolvedNoteText;
   };
 
   toolkit.mountUi = () => {
@@ -186,5 +282,33 @@
 
     mountPoint.appendChild(ui);
     toolkit.log("UI mounted using fallback header location.");
+  };
+
+  toolkit.mountRightSideControls = () => {
+    const existing = document.getElementById(toolkit.constants.RIGHT_CONTROLS_ID);
+    if (!toolkit.isPullRequestFilesView()) {
+      existing?.remove();
+      return;
+    }
+
+    const mountTarget = toolkit.findRightSideMountTarget();
+    if (!mountTarget) {
+      existing?.remove();
+      return;
+    }
+
+    if (!existing) {
+      const controls = toolkit.buildRightSideControlsUi();
+      mountTarget.parent.insertBefore(controls, mountTarget.before);
+      toolkit.updateRightSideControlsState(controls);
+      return;
+    }
+
+    if (existing.parentElement !== mountTarget.parent || existing.nextElementSibling !== mountTarget.before) {
+      existing.remove();
+      mountTarget.parent.insertBefore(existing, mountTarget.before);
+    }
+
+    toolkit.updateRightSideControlsState(existing);
   };
 })();

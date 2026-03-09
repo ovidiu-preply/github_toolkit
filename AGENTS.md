@@ -24,6 +24,12 @@ After every substantive change (only if `chrome-devtools-mcp` is available and c
    - owner badges are rendered in diff headers
    - badge hover popup appears and has visible background
 
+## Browser tooling rule
+
+- Use Chrome DevTools MCP connected to the existing local Chrome instance for all manual checks.
+- Do not use the embedded browser for extension testing in this repository.
+- Prefer working with the currently open PR page/session to keep extension state and auth context intact.
+
 ## File structure
 
 - `manifest.json`

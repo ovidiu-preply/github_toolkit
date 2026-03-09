@@ -3,7 +3,9 @@
 
   toolkit.constants = {
     ROOT_ID: "gh-owner-filter-root",
+    RIGHT_CONTROLS_ID: "gh-owner-filter-right-controls",
     HOVERCARD_ID: "gh-owner-filter-hovercard",
+    NO_OWNER_FILTER_VALUE: "__GH_OWNER_FILTER_NO_OWNER__",
     DEBUG: false
   };
 
@@ -11,7 +13,14 @@
     lastOwnerSignature: "",
     lastPathname: "",
     activeOwnerFilter: [],
-    hovercardHideTimer: null
+    hovercardHideTimer: null,
+    ownerData: {
+      status: "idle",
+      routeKey: "",
+      source: "none",
+      allOwners: [],
+      ownersByPath: {}
+    }
   };
 
   toolkit.log = (...args) => {
@@ -83,6 +92,21 @@
 
   toolkit.getDiffFileBlocks = () => Array.from(document.querySelectorAll('div[id^="diff-"][role="region"]'));
 
+  toolkit.findRightSideMountTarget = () => {
+    const fileBlock = toolkit.getDiffFileBlocks().find((block) => toolkit.isActuallyVisible(block));
+    if (!fileBlock) {
+      return null;
+    }
+
+    const wrapper = toolkit.getDiffBlockWrapper(fileBlock);
+    const parent = wrapper.parentElement;
+    if (!parent) {
+      return null;
+    }
+
+    return { parent, before: wrapper };
+  };
+
   toolkit.setElementHidden = (element, hidden) => {
     element.classList.toggle("gh-owner-filter--hidden", hidden);
     if (hidden) {
@@ -129,6 +153,19 @@
       .replace(/^\/+/, "");
   };
 
+  toolkit.parsePullRequestRoute = () => {
+    const match = window.location.pathname.match(/^\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:\/(?:files|changes))?\/?$/);
+    if (!match) {
+      return null;
+    }
+
+    return {
+      owner: match[1],
+      repo: match[2],
+      pullNumber: match[3]
+    };
+  };
+
   toolkit.getDiffBlockWrapper = (fileBlock) => {
     const parent = fileBlock.parentElement;
     if (!parent) {
@@ -140,6 +177,68 @@
     }
 
     return fileBlock;
+  };
+
+  toolkit.getFileHeaderToggleButton = (fileBlock) => {
+    if (!fileBlock) {
+      return null;
+    }
+
+    const header = fileBlock.querySelector('[class*="DiffFileHeader-module__diff-file-header"]');
+    if (!header) {
+      return null;
+    }
+
+    const buttons = Array.from(header.querySelectorAll('button[data-component="IconButton"]'));
+    return (
+      buttons.find((button) =>
+        Boolean(button.querySelector("svg.octicon-chevron-down, svg.octicon-chevron-right"))
+      ) || null
+    );
+  };
+
+  toolkit.isFileBlockExpanded = (fileBlock) => {
+    const toggleButton = toolkit.getFileHeaderToggleButton(fileBlock);
+    if (!toggleButton) {
+      return null;
+    }
+
+    if (toggleButton.querySelector("svg.octicon-chevron-down")) {
+      return true;
+    }
+
+    if (toggleButton.querySelector("svg.octicon-chevron-right")) {
+      return false;
+    }
+
+    return null;
+  };
+
+  toolkit.setAllRightSideFilesExpanded = (expand) => {
+    const fileBlocks = toolkit
+      .getDiffFileBlocks()
+      .filter((fileBlock) => !toolkit.isElementHiddenByFilter(fileBlock));
+    let changedCount = 0;
+    let actionableCount = 0;
+
+    for (const fileBlock of fileBlocks) {
+      const expanded = toolkit.isFileBlockExpanded(fileBlock);
+      const toggleButton = toolkit.getFileHeaderToggleButton(fileBlock);
+      if (expanded === null || !toggleButton) {
+        continue;
+      }
+
+      actionableCount += 1;
+      const shouldClick = expand ? !expanded : expanded;
+      if (!shouldClick) {
+        continue;
+      }
+
+      toggleButton.click();
+      changedCount += 1;
+    }
+
+    return { changedCount, actionableCount };
   };
 
   toolkit.getTreeRoot = () => {

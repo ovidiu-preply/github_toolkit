@@ -22,12 +22,21 @@
       toolkit.state.lastPathname = window.location.pathname;
       toolkit.state.lastOwnerSignature = "";
       toolkit.state.activeOwnerFilter = [];
+      toolkit.state.ownerData = {
+        status: "idle",
+        routeKey: "",
+        source: "none",
+        allOwners: [],
+        ownersByPath: {}
+      };
       toolkit.applyOwnerFilter([]);
       toolkit.applyTreeViewFilter([]);
       toolkit.log("Route changed:", toolkit.state.lastPathname);
     }
 
+    void toolkit.refreshOwnerData();
     toolkit.mountUi();
+    toolkit.mountRightSideControls();
     toolkit.updateOwnersUi();
     toolkit.updateFileOwnerBadges();
     if (toolkit.state.activeOwnerFilter.length > 0) {
