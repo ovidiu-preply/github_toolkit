@@ -40,6 +40,160 @@
     pickerToggle.textContent = `${selectedOwners.length} owners selected`;
   };
 
+  toolkit.findNativeFileFilterPopup = () => {
+    const globalMenus = Array.from(document.querySelectorAll('[role="menu"]'));
+    const visibleFilterMenu = globalMenus.find((menu) => {
+      if (!toolkit.isActuallyVisible(menu)) {
+        return false;
+      }
+
+      const ariaLabel = (menu.getAttribute("aria-label") || "").toLowerCase();
+      if (ariaLabel.includes("filter options")) {
+        return true;
+      }
+
+      const menuText = (menu.textContent || "").toLowerCase();
+      return menuText.includes("viewed files");
+    });
+    if (visibleFilterMenu) {
+      return visibleFilterMenu;
+    }
+
+    const filterHost = document.getElementById("diff-file-tree-filter");
+    if (!filterHost) {
+      return null;
+    }
+
+    const popupCandidates = Array.from(
+      filterHost.querySelectorAll(
+        '[role="dialog"], [role="menu"], .SelectMenu-modal, [class*="ActionListWrap"], [class*="ActionList"]'
+      )
+    );
+    return popupCandidates.find((element) => toolkit.isActuallyVisible(element)) || null;
+  };
+
+  toolkit.findNativeFileFilterPopupMountTarget = (popupRoot) => {
+    if (!popupRoot) {
+      return null;
+    }
+
+    if (popupRoot.getAttribute("role") === "menu") {
+      return popupRoot;
+    }
+
+    return (
+      popupRoot.querySelector('[class*="ActionListWrap"]') ||
+      popupRoot.querySelector('[class*="ActionList"]') ||
+      popupRoot.querySelector('[role="menu"]') ||
+      popupRoot
+    );
+  };
+
+  toolkit.getTestFilesCount = () =>
+    toolkit.getAllChangedFilePaths().filter((filePath) => toolkit.isTestFilePath(filePath)).length;
+
+  toolkit.updateNativeTestFilesFilterRowContent = (row) => {
+    if (!row) {
+      return;
+    }
+
+    const count = toolkit.getTestFilesCount();
+    const labelElement =
+      row.querySelector('[id$="--label"]') ||
+      row.querySelector('[class*="ActionList-ItemLabel"]') ||
+      row.querySelector('[class*="ItemLabel"]');
+    if (labelElement) {
+      labelElement.textContent = "Include test files";
+    } else {
+      row.textContent = "Include test files";
+    }
+
+    const trailingVisual =
+      row.querySelector('[id$="--trailing-visual"]') ||
+      row.querySelector('[class*="ActionList-TrailingVisual"]') ||
+      row.querySelector('[class*="TrailingVisual"]');
+    if (trailingVisual) {
+      const counterLabel = trailingVisual.querySelector('[class*="CounterLabel"]');
+      const counterHidden = trailingVisual.querySelector('[class*="VisuallyHidden"]');
+      if (counterLabel) {
+        counterLabel.textContent = String(count);
+      } else {
+        trailingVisual.textContent = String(count);
+      }
+      if (counterHidden) {
+        counterHidden.textContent = ` (${count})`;
+      }
+    } else if (labelElement) {
+      labelElement.textContent = `Include test files (${count})`;
+    }
+  };
+
+  toolkit.buildNativeTestFilesFilterRow = (templateItem) => {
+    const row = templateItem ? templateItem.cloneNode(true) : document.createElement("li");
+    row.classList.add("gh-owner-filter__native-test-filter-row");
+    row.setAttribute("role", "menuitemcheckbox");
+    row.setAttribute("aria-checked", toolkit.state.includeTestFiles ? "true" : "false");
+    row.tabIndex = 0;
+    row.removeAttribute("aria-keyshortcuts");
+    row.removeAttribute("aria-labelledby");
+
+    for (const elementWithId of row.querySelectorAll("[id]")) {
+      elementWithId.removeAttribute("id");
+    }
+    toolkit.updateNativeTestFilesFilterRowContent(row);
+
+    const applyState = () => {
+      toolkit.state.includeTestFiles = !toolkit.state.includeTestFiles;
+      row.setAttribute("aria-checked", toolkit.state.includeTestFiles ? "true" : "false");
+      toolkit.applyFiltersAndUpdateNote?.();
+    };
+
+    row.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      applyState();
+    });
+    row.addEventListener("keydown", (event) => {
+      if (event.key !== " " && event.key !== "Enter") {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      applyState();
+    });
+
+    return row;
+  };
+
+  toolkit.mountNativeFileFilterControls = () => {
+    if (!toolkit.isPullRequestFilesView()) {
+      return;
+    }
+
+    const popupRoot = toolkit.findNativeFileFilterPopup();
+    if (!popupRoot) {
+      return;
+    }
+
+    const mountTarget = toolkit.findNativeFileFilterPopupMountTarget(popupRoot);
+    if (!mountTarget) {
+      return;
+    }
+
+    const templateItem = popupRoot.querySelector(
+      '[role="menuitemcheckbox"]:not(.gh-owner-filter__native-test-filter-row)'
+    );
+    const existing = mountTarget.querySelector(".gh-owner-filter__native-test-filter-row");
+    if (existing) {
+      existing.setAttribute("aria-checked", toolkit.state.includeTestFiles ? "true" : "false");
+      toolkit.updateNativeTestFilesFilterRowContent(existing);
+      return;
+    }
+
+    const row = toolkit.buildNativeTestFilesFilterRow(templateItem);
+    mountTarget.appendChild(row);
+  };
+
   toolkit.buildRightSideControlsUi = () => {
     const root = document.createElement("div");
     root.id = toolkit.constants.RIGHT_CONTROLS_ID;

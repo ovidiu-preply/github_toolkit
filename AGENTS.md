@@ -24,6 +24,10 @@ After every substantive change (only if `chrome-devtools-mcp` is available and c
    - owner badges are rendered in diff headers
    - badge hover popup appears and has visible background
 
+Enforcement:
+- Do not start or report manual verification until the extension has been reloaded for the current code state.
+- If any code changes are made during a verification cycle, reload the extension again before continuing checks.
+
 ## Browser tooling rule
 
 - Use Chrome DevTools MCP connected to the existing local Chrome instance for all manual checks.

@@ -1,20 +1,27 @@
 (() => {
   const toolkit = window.__ghPrToolkit;
 
-  toolkit.applyCurrentSelection = (root) => {
-    toolkit.state.activeOwnerFilter = toolkit.getSelectedOwners(root);
-    const { totalCount, visibleCount } = toolkit.applyOwnerFilter(toolkit.state.activeOwnerFilter);
-    toolkit.applyTreeViewFilter(toolkit.state.activeOwnerFilter);
-    if (toolkit.state.activeOwnerFilter.length === 0) {
-      toolkit.updateNote(`Showing all files (${visibleCount}/${totalCount}).`);
-      toolkit.logVisibleFilesSnapshot(toolkit.state.activeOwnerFilter);
+  toolkit.applyFiltersAndUpdateNote = () => {
+    const selectedOwners = toolkit.state.activeOwnerFilter;
+    const includeTestFiles = toolkit.state.includeTestFiles;
+    const { totalCount, visibleCount } = toolkit.applyOwnerFilter(selectedOwners, includeTestFiles);
+    toolkit.applyTreeViewFilter(selectedOwners, includeTestFiles);
+    const testFilesLabel = includeTestFiles ? "" : " excluding test files";
+    if (selectedOwners.length === 0) {
+      toolkit.updateNote(`Showing ${visibleCount}/${totalCount} files${testFilesLabel}.`);
+      toolkit.logVisibleFilesSnapshot(selectedOwners, includeTestFiles);
       return;
     }
 
     toolkit.updateNote(
-      `Showing ${visibleCount}/${totalCount} files for ${toolkit.state.activeOwnerFilter.length} selected owner(s).`
+      `Showing ${visibleCount}/${totalCount} files for ${selectedOwners.length} selected owner(s)${testFilesLabel}.`
     );
-    toolkit.logVisibleFilesSnapshot(toolkit.state.activeOwnerFilter);
+    toolkit.logVisibleFilesSnapshot(selectedOwners, includeTestFiles);
+  };
+
+  toolkit.applyCurrentSelection = (root) => {
+    toolkit.state.activeOwnerFilter = toolkit.getSelectedOwners(root);
+    toolkit.applyFiltersAndUpdateNote();
   };
 
   toolkit.tick = () => {
@@ -22,6 +29,7 @@
       toolkit.state.lastPathname = window.location.pathname;
       toolkit.state.lastOwnerSignature = "";
       toolkit.state.activeOwnerFilter = [];
+      toolkit.state.includeTestFiles = true;
       toolkit.state.ownerData = {
         status: "idle",
         routeKey: "",
@@ -29,25 +37,18 @@
         allOwners: [],
         ownersByPath: {}
       };
-      toolkit.applyOwnerFilter([]);
-      toolkit.applyTreeViewFilter([]);
+      toolkit.applyOwnerFilter([], true);
+      toolkit.applyTreeViewFilter([], true);
       toolkit.log("Route changed:", toolkit.state.lastPathname);
     }
 
     void toolkit.refreshOwnerData();
     toolkit.mountUi();
+    toolkit.mountNativeFileFilterControls();
     toolkit.mountRightSideControls();
     toolkit.updateOwnersUi();
     toolkit.updateFileOwnerBadges();
-    if (toolkit.state.activeOwnerFilter.length > 0) {
-      const { totalCount, visibleCount } = toolkit.applyOwnerFilter(toolkit.state.activeOwnerFilter);
-      toolkit.applyTreeViewFilter(toolkit.state.activeOwnerFilter);
-      toolkit.updateNote(
-        `Showing ${visibleCount}/${totalCount} files for ${toolkit.state.activeOwnerFilter.length} selected owner(s).`
-      );
-    } else {
-      toolkit.applyTreeViewFilter([]);
-    }
+    toolkit.applyFiltersAndUpdateNote();
   };
 
   toolkit.log("Content script loaded at:", window.location.href);

@@ -5,6 +5,7 @@
     ROOT_ID: "gh-owner-filter-root",
     RIGHT_CONTROLS_ID: "gh-owner-filter-right-controls",
     HOVERCARD_ID: "gh-owner-filter-hovercard",
+    TEST_FILES_FILTER_ID: "gh-owner-filter-test-files-toggle",
     NO_OWNER_FILTER_VALUE: "__GH_OWNER_FILTER_NO_OWNER__",
     DEBUG: false
   };
@@ -13,6 +14,7 @@
     lastOwnerSignature: "",
     lastPathname: "",
     activeOwnerFilter: [],
+    includeTestFiles: true,
     hovercardHideTimer: null,
     ownerData: {
       status: "idle",
@@ -177,6 +179,28 @@
     }
 
     return fileBlock;
+  };
+
+  toolkit.getFilePathFromFileBlock = (fileBlock) => {
+    if (!fileBlock) {
+      return "";
+    }
+
+    const pathNode = fileBlock.querySelector("h3 code");
+    return toolkit.normalizeFilePath(pathNode?.textContent || fileBlock.id || "");
+  };
+
+  toolkit.isTestFilePath = (filePath) => /test/i.test(toolkit.normalizeFilePath(filePath));
+
+  toolkit.getAllChangedFilePaths = () => {
+    const uniquePaths = new Set();
+    for (const fileBlock of toolkit.getDiffFileBlocks()) {
+      const path = toolkit.getFilePathFromFileBlock(fileBlock);
+      if (path) {
+        uniquePaths.add(path);
+      }
+    }
+    return Array.from(uniquePaths);
   };
 
   toolkit.getFileHeaderToggleButton = (fileBlock) => {
