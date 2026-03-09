@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "GitHub PR Toolkit",
+  "description": "Enhances GitHub pull request changes view with owner-focused utilities.",
+  "version": "0.1.0",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://github.com/*"
+      ],
+      "js": [
+        "src/content/shared.js",
+        "src/content/owners.js",
+        "src/content/filtering.js",
+        "src/content/ui.js",
+        "src/content/main.js"
+      ],
+      "css": [
+        "src/styles.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
