@@ -1,6 +1,6 @@
 # GitHub PR Toolkit
 
-Chrome extension that enhances GitHub Pull Request **changes view** with code-owner focused tooling.
+Browser extension that enhances GitHub Pull Request **changes view** with code-owner focused tooling.
 
 ## What it does
 
@@ -54,6 +54,14 @@ Core content-script logic is split into modules:
 3. Click **Load unpacked**.
 4. Select this root folder.
 
+## Load in Firefox
+
+1. Open `about:debugging#/runtime/this-firefox`
+2. Click **Load Temporary Add-on...**
+3. Select the repo's `manifest.json`
+
+Note: `manifest.json` includes Firefox-specific `browser_specific_settings.gecko` metadata and still loads locally in Chrome.
+
 ## Dev workflow
 
 After code changes:
@@ -70,3 +78,4 @@ After code changes:
 
 - Extension runs on `https://github.com/*` and is intended for PR changes pages.
 - Mounting uses structure/id-based selectors (not UI text matching) where possible.
+- `manifest.json` is the only manifest needed for local Chrome + Firefox testing.

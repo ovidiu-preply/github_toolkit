@@ -51,33 +51,26 @@
     const treeContainer =
       document.querySelector('div[class*="PullRequestFileTree-module__FileTreeScrollable"]') ||
       document.querySelector('div[class*="PullRequestFileTree"]');
-    if (!treeContainer) {
-      return null;
-    }
-
-    const treeRoot = treeContainer.querySelector('ul[role="tree"]');
-    if (!treeRoot) {
-      return null;
-    }
-
-    const treeParent = treeRoot.parentElement;
-    if (!treeParent) {
-      return null;
-    }
-
-    const siblingAboveTree = treeRoot.previousElementSibling;
-    if (siblingAboveTree?.querySelector?.("#diff-file-tree-filter, input[type='text']")) {
+    const treeRoot = toolkit.getTreeRoot();
+    const treeParent = treeRoot?.parentElement || null;
+    const siblingAboveTree = treeRoot?.previousElementSibling || null;
+    if (treeParent && siblingAboveTree?.querySelector?.("#diff-file-tree-filter, input[type='text']")) {
       return { parent: treeParent, before: siblingAboveTree };
     }
 
-    const sidebarContainer = treeContainer.closest("#pr-file-tree") || treeContainer.parentElement;
-    const filterHost = sidebarContainer?.querySelector("#diff-file-tree-filter");
+    const sidebarContainer =
+      treeContainer?.closest("#pr-file-tree, .diff-sidebar") ||
+      treeRoot?.closest("#pr-file-tree, .diff-sidebar") ||
+      document.querySelector("#pr-file-tree, .diff-sidebar");
+    const filterHost = sidebarContainer?.querySelector("#diff-file-tree-filter, diff-file-filter");
     if (filterHost?.parentElement) {
       return { parent: filterHost.parentElement, before: filterHost };
     }
 
     const filterInput =
+      sidebarContainer?.querySelector("#file-tree-filter-field") ||
       sidebarContainer?.querySelector('input.prc-components-Input-IwWrt[type="text"]') ||
+      sidebarContainer?.querySelector('input[type="text"][aria-label*="Filter changed files"]') ||
       sidebarContainer?.querySelector('input[type="text"]');
     if (!filterInput) {
       return null;
@@ -91,7 +84,13 @@
     return { parent: filterRow.parentElement, before: filterRow };
   };
 
-  toolkit.getDiffFileBlocks = () => Array.from(document.querySelectorAll('div[id^="diff-"][role="region"]'));
+  toolkit.getDiffFileBlocks = () => {
+    const blocks = [
+      ...Array.from(document.querySelectorAll('div[id^="diff-"][role="region"]')),
+      ...Array.from(document.querySelectorAll('div.file.js-file[id^="diff-"], div.js-file[id^="diff-"]'))
+    ];
+    return Array.from(new Set(blocks));
+  };
 
   toolkit.findRightSideMountTarget = () => {
     const fileBlock = toolkit.getDiffFileBlocks().find((block) => toolkit.isActuallyVisible(block));
@@ -187,8 +186,17 @@
       return "";
     }
 
-    const pathNode = fileBlock.querySelector("h3 code");
-    return toolkit.normalizeFilePath(pathNode?.textContent || fileBlock.id || "");
+    const directDataPath = fileBlock.getAttribute("data-path");
+    const pathNode =
+      fileBlock.querySelector("h3 code") ||
+      fileBlock.querySelector(".file-info a[title]") ||
+      fileBlock.querySelector(".file-header a[title]") ||
+      fileBlock.querySelector(".file-info a[data-path]") ||
+      fileBlock.querySelector("[data-path]");
+    const attributePath = pathNode?.getAttribute?.("data-path") || pathNode?.getAttribute?.("title");
+    const rawPath = directDataPath || attributePath || pathNode?.textContent || fileBlock.id || "";
+    const deEllipsized = rawPath.replace(/^\.\.\.\//, "");
+    return toolkit.normalizeFilePath(deEllipsized);
   };
 
   toolkit.isTestFilePath = (filePath) => /test/i.test(toolkit.normalizeFilePath(filePath));
@@ -209,23 +217,34 @@
       return null;
     }
 
-    const header = fileBlock.querySelector('[class*="DiffFileHeader-module__diff-file-header"]');
+    const header = fileBlock.querySelector('[class*="DiffFileHeader-module__diff-file-header"], .file-header');
     if (!header) {
       return null;
     }
 
-    const buttons = Array.from(header.querySelectorAll('button[data-component="IconButton"]'));
-    return (
-      buttons.find((button) =>
-        Boolean(button.querySelector("svg.octicon-chevron-down, svg.octicon-chevron-right"))
-      ) || null
+    const modernButtons = Array.from(header.querySelectorAll('button[data-component="IconButton"]'));
+    const modernToggle = modernButtons.find((button) =>
+      Boolean(button.querySelector("svg.octicon-chevron-down, svg.octicon-chevron-right"))
     );
+    if (modernToggle) {
+      return modernToggle;
+    }
+
+    return header.querySelector("button.js-details-target, button[aria-label='Toggle diff contents']");
   };
 
   toolkit.isFileBlockExpanded = (fileBlock) => {
     const toggleButton = toolkit.getFileHeaderToggleButton(fileBlock);
     if (!toggleButton) {
       return null;
+    }
+
+    const ariaExpanded = toggleButton.getAttribute("aria-expanded");
+    if (ariaExpanded === "true") {
+      return true;
+    }
+    if (ariaExpanded === "false") {
+      return false;
     }
 
     if (toggleButton.querySelector("svg.octicon-chevron-down")) {
@@ -283,8 +302,21 @@
 
   toolkit.getTreeItemLinkToDiff = (treeItem) => treeItem.querySelector('a[href^="#diff-"]');
 
+  toolkit.isTreeFileRow = (treeItem) => {
+    if (!treeItem || !toolkit.getTreeItemLinkToDiff(treeItem)) {
+      return false;
+    }
+
+    if (
+      treeItem.classList.contains("DiffFileTree-module__file-tree-row__PCB1B") ||
+      treeItem.classList.contains("ActionList-item--subItem")
+    ) {
+      return true;
+    }
+
+    return !treeItem.querySelector(":scope li[role='treeitem']");
+  };
+
   toolkit.getTreeFileRows = (treeRoot) =>
-    Array.from(treeRoot.querySelectorAll('li[role="treeitem"].DiffFileTree-module__file-tree-row__PCB1B')).filter(
-      (item) => Boolean(toolkit.getTreeItemLinkToDiff(item))
-    );
+    Array.from(treeRoot.querySelectorAll('li[role="treeitem"]')).filter((item) => toolkit.isTreeFileRow(item));
 })();

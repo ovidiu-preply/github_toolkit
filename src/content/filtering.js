@@ -86,9 +86,10 @@
     const leafRows = toolkit.getTreeFileRows(treeRoot);
 
     for (const leafItem of leafRows) {
-      const diffHref = toolkit.getTreeItemLinkToDiff(leafItem)?.getAttribute("href") || "";
+      const treeLink = toolkit.getTreeItemLinkToDiff(leafItem);
+      const diffHref = treeLink?.getAttribute("href") || "";
       const diffId = diffHref.replace("#", "");
-      const treePath = toolkit.normalizeFilePath(leafItem.id);
+      const treePath = toolkit.normalizeFilePath(treeLink?.textContent || leafItem.id);
       const isAllowedByTestFilter = includeTestFiles || !toolkit.isTestFilePath(treePath);
       const isVisible =
         isAllowedByTestFilter &&
@@ -100,7 +101,7 @@
     }
 
     const folderRows = Array.from(treeRoot.querySelectorAll('li[role="treeitem"]')).filter(
-      (item) => !item.classList.contains("DiffFileTree-module__file-tree-row__PCB1B")
+      (item) => !toolkit.isTreeFileRow(item)
     );
 
     for (const folderRow of folderRows) {
@@ -110,8 +111,8 @@
       }
 
       const descendantFileRows = Array.from(
-        folderRow.querySelectorAll('li[role="treeitem"].DiffFileTree-module__file-tree-row__PCB1B')
-      );
+        folderRow.querySelectorAll('li[role="treeitem"]')
+      ).filter((item) => toolkit.isTreeFileRow(item));
       if (descendantFileRows.length === 0) {
         toolkit.setElementHidden(folderRow, false);
         continue;

@@ -253,8 +253,7 @@
   };
 
   toolkit.getOwnersForFileBlock = (fileBlock) => {
-    const pathNode = fileBlock.querySelector("h3 code");
-    const pathFromHeader = toolkit.normalizeFilePath(pathNode?.textContent || "");
+    const pathFromHeader = toolkit.getFilePathFromFileBlock(fileBlock);
     const ownersFromData = toolkit.getOwnersForPathFromData(pathFromHeader);
     if (toolkit.pathExistsInOwnerData(pathFromHeader)) {
       return new Set(ownersFromData);
@@ -465,9 +464,13 @@
       const badgeText = toolkit.buildOwnerBadgeText(owners);
       const existingBadge = fileBlock.querySelector(".gh-owner-filter__file-owner-badge");
 
-      const copyButton = fileBlock.querySelector(".octicon-copy")?.closest("button");
+      const copyIcon = fileBlock.querySelector(".octicon-copy");
+      const badgeAnchor =
+        copyIcon?.closest("button, clipboard-copy, a, span") ||
+        fileBlock.querySelector(".file-info a[title]") ||
+        fileBlock.querySelector("h3 code");
 
-      if (!copyButton) {
+      if (!badgeAnchor) {
         if (existingBadge) {
           existingBadge.remove();
         }
@@ -503,7 +506,7 @@
       toolkit.bindBadgeHoverHandlers(badge);
 
       if (!existingBadge) {
-        copyButton.insertAdjacentElement("afterend", badge);
+        badgeAnchor.insertAdjacentElement("afterend", badge);
       }
     }
   };

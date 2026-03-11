@@ -77,11 +77,9 @@
       return null;
     }
 
-    if (popupRoot.getAttribute("role") === "menu") {
-      return popupRoot;
-    }
-
     return (
+      popupRoot.querySelector(".SelectMenu-list") ||
+      popupRoot.querySelector(".SelectMenu-modal") ||
       popupRoot.querySelector('[class*="ActionListWrap"]') ||
       popupRoot.querySelector('[class*="ActionList"]') ||
       popupRoot.querySelector('[role="menu"]') ||
@@ -98,6 +96,31 @@
     }
 
     const count = toolkit.getTestFilesCount();
+    const isLegacySelectMenuItem = row.classList.contains("SelectMenu-item");
+    if (isLegacySelectMenuItem) {
+      row.innerHTML = "";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.className = "mr-2";
+      checkbox.checked = toolkit.state.includeTestFiles;
+      checkbox.setAttribute("aria-hidden", "true");
+      checkbox.tabIndex = -1;
+      row.appendChild(checkbox);
+
+      const labelText = document.createElement("span");
+      labelText.className = "text-normal";
+      labelText.textContent = "Include test files";
+      row.appendChild(labelText);
+
+      row.append("\u00a0");
+
+      const countText = document.createElement("span");
+      countText.className = "text-normal js-file-type-count";
+      countText.textContent = `(${count})`;
+      row.appendChild(countText);
+      return;
+    }
+
     const labelElement =
       row.querySelector('[id$="--label"]') ||
       row.querySelector('[class*="ActionList-ItemLabel"]') ||
@@ -131,9 +154,15 @@
   toolkit.buildNativeTestFilesFilterRow = (templateItem) => {
     const row = templateItem ? templateItem.cloneNode(true) : document.createElement("li");
     row.classList.add("gh-owner-filter__native-test-filter-row");
-    row.setAttribute("role", "menuitemcheckbox");
-    row.setAttribute("aria-checked", toolkit.state.includeTestFiles ? "true" : "false");
-    row.tabIndex = 0;
+    const isLegacySelectMenuItem = row.classList.contains("SelectMenu-item");
+    row.setAttribute("role", isLegacySelectMenuItem ? "menuitem" : "menuitemcheckbox");
+    if (isLegacySelectMenuItem) {
+      row.removeAttribute("aria-checked");
+      row.removeAttribute("tabindex");
+    } else {
+      row.setAttribute("aria-checked", toolkit.state.includeTestFiles ? "true" : "false");
+      row.tabIndex = 0;
+    }
     row.removeAttribute("aria-keyshortcuts");
     row.removeAttribute("aria-labelledby");
 
@@ -144,7 +173,13 @@
 
     const applyState = () => {
       toolkit.state.includeTestFiles = !toolkit.state.includeTestFiles;
-      row.setAttribute("aria-checked", toolkit.state.includeTestFiles ? "true" : "false");
+      if (!isLegacySelectMenuItem) {
+        row.setAttribute("aria-checked", toolkit.state.includeTestFiles ? "true" : "false");
+      }
+      const checkbox = row.querySelector('input[type="checkbox"]');
+      if (checkbox) {
+        checkbox.checked = toolkit.state.includeTestFiles;
+      }
       toolkit.applyFiltersAndUpdateNote?.();
     };
 
@@ -180,18 +215,50 @@
       return;
     }
 
-    const templateItem = popupRoot.querySelector(
-      '[role="menuitemcheckbox"]:not(.gh-owner-filter__native-test-filter-row)'
+    const menuItems = Array.from(
+      popupRoot.querySelectorAll(
+        '[role="menuitem"]:not(.gh-owner-filter__native-test-filter-row), [role="menuitemcheckbox"]:not(.gh-owner-filter__native-test-filter-row)'
+      )
     );
-    const existing = mountTarget.querySelector(".gh-owner-filter__native-test-filter-row");
+    const viewedFilesItem = menuItems.find((item) => /viewed files/i.test(item.textContent || "")) || null;
+    const menuCheckboxItems = menuItems.filter((item) => item.getAttribute("role") === "menuitemcheckbox");
+    const badgeTemplateItem = menuCheckboxItems.find(
+      (item) =>
+        Boolean(
+          item.querySelector(
+            '[id$="--trailing-visual"], [class*="ActionList-TrailingVisual"], [class*="TrailingVisual"], .Counter, .CounterLabel'
+          )
+        )
+    );
+    const isLegacyPopup = Boolean(
+      popupRoot.querySelector(".SelectMenu-list") || popupRoot.querySelector(".SelectMenu-modal")
+    );
+    const templateItem = isLegacyPopup
+      ? viewedFilesItem || menuCheckboxItems[0] || null
+      : badgeTemplateItem || menuCheckboxItems[0] || viewedFilesItem || null;
+    const insertionParent = viewedFilesItem?.parentElement || templateItem?.parentElement || mountTarget;
+    const existing = insertionParent.querySelector(".gh-owner-filter__native-test-filter-row");
     if (existing) {
-      existing.setAttribute("aria-checked", toolkit.state.includeTestFiles ? "true" : "false");
+      if (existing.classList.contains("SelectMenu-item")) {
+        existing.removeAttribute("aria-checked");
+      } else {
+        existing.setAttribute("aria-checked", toolkit.state.includeTestFiles ? "true" : "false");
+      }
       toolkit.updateNativeTestFilesFilterRowContent(existing);
       return;
     }
 
     const row = toolkit.buildNativeTestFilesFilterRow(templateItem);
-    mountTarget.appendChild(row);
+    if (
+      viewedFilesItem &&
+      viewedFilesItem.parentElement &&
+      viewedFilesItem.parentElement === insertionParent
+    ) {
+      viewedFilesItem.insertAdjacentElement("afterend", row);
+      return;
+    }
+
+    insertionParent.appendChild(row);
   };
 
   toolkit.buildRightSideControlsUi = () => {
@@ -199,29 +266,36 @@
     root.id = toolkit.constants.RIGHT_CONTROLS_ID;
     root.className = "gh-owner-filter-right-controls";
 
-    const expandButton = document.createElement("button");
-    expandButton.type = "button";
-    expandButton.className = "gh-owner-filter-right-controls__button";
-    expandButton.textContent = "Expand all";
-    expandButton.addEventListener("click", () => {
-      const { changedCount } = toolkit.setAllRightSideFilesExpanded(true);
-      toolkit.log("Expand all files clicked. Changed:", changedCount);
+    const toggleButton = document.createElement("button");
+    toggleButton.type = "button";
+    toggleButton.className = "gh-owner-filter-right-controls__button";
+    toggleButton.textContent = "Expand / Collapse all";
+    toggleButton.addEventListener("click", () => {
+      const nextExpandedState = toolkit.getShouldExpandAllVisibleFiles();
+      const { changedCount } = toolkit.setAllRightSideFilesExpanded(nextExpandedState);
+      toolkit.log(
+        `${nextExpandedState ? "Expand" : "Collapse"} all files clicked. Changed:`,
+        changedCount
+      );
       toolkit.updateRightSideControlsState(root);
     });
 
-    const collapseButton = document.createElement("button");
-    collapseButton.type = "button";
-    collapseButton.className = "gh-owner-filter-right-controls__button";
-    collapseButton.textContent = "Collapse all";
-    collapseButton.addEventListener("click", () => {
-      const { changedCount } = toolkit.setAllRightSideFilesExpanded(false);
-      toolkit.log("Collapse all files clicked. Changed:", changedCount);
-      toolkit.updateRightSideControlsState(root);
-    });
-
-    root.appendChild(expandButton);
-    root.appendChild(collapseButton);
+    root.appendChild(toggleButton);
     return root;
+  };
+
+  toolkit.getShouldExpandAllVisibleFiles = () => {
+    const fileBlocks = toolkit
+      .getDiffFileBlocks()
+      .filter((fileBlock) => !toolkit.isElementHiddenByFilter(fileBlock));
+
+    for (const fileBlock of fileBlocks) {
+      if (toolkit.isFileBlockExpanded(fileBlock) === false) {
+        return true;
+      }
+    }
+
+    return false;
   };
 
   toolkit.updateRightSideControlsState = (root) => {
@@ -229,29 +303,15 @@
       return;
     }
 
-    const buttons = root.querySelectorAll(".gh-owner-filter-right-controls__button");
-    if (buttons.length !== 2) {
+    const toggleButton = root.querySelector(".gh-owner-filter-right-controls__button");
+    if (!toggleButton) {
       return;
     }
 
-    const [expandButton, collapseButton] = buttons;
     const fileBlocks = toolkit
       .getDiffFileBlocks()
       .filter((fileBlock) => !toolkit.isElementHiddenByFilter(fileBlock));
-    let hasExpanded = false;
-    let hasCollapsed = false;
-
-    for (const fileBlock of fileBlocks) {
-      const expanded = toolkit.isFileBlockExpanded(fileBlock);
-      if (expanded === true) {
-        hasExpanded = true;
-      } else if (expanded === false) {
-        hasCollapsed = true;
-      }
-    }
-
-    expandButton.disabled = !hasCollapsed;
-    collapseButton.disabled = !hasExpanded;
+    toggleButton.disabled = fileBlocks.length === 0;
   };
 
   toolkit.buildFilterUi = () => {

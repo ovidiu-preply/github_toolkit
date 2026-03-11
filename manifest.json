@@ -3,6 +3,11 @@
   "name": "GitHub PR Toolkit",
   "description": "Enhances GitHub pull request changes view with owner-focused utilities.",
   "version": "0.1.0",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "github-pr-toolkit@local"
+    }
+  },
   "content_scripts": [
     {
       "matches": [
