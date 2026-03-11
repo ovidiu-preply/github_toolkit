@@ -33,8 +33,7 @@
   };
 
   toolkit.isPullRequestFilesView = () => {
-    const path = window.location.pathname;
-    return /^\/[^/]+\/[^/]+\/pull\/\d+(?:\/(?:files|changes))?\/?$/.test(path);
+    return Boolean(toolkit.parsePullRequestRoute());
   };
 
   toolkit.findMountPoint = () =>
@@ -156,7 +155,9 @@
   };
 
   toolkit.parsePullRequestRoute = () => {
-    const match = window.location.pathname.match(/^\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:\/(?:files|changes))?\/?$/);
+    const match = window.location.pathname.match(
+      /^\/([^/]+)\/([^/]+)\/pull\/(\d+)\/(?:files|changes)\/?$/
+    );
     if (!match) {
       return null;
     }
